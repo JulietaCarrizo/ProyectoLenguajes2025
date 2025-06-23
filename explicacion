@@ -1,0 +1,177 @@
+from graphviz import Digraph  #importa Digraph desde el modulo graphviz que permite crear graficos dirigdos
+
+state_counter = 0  #se usa para numerar los estados automaticamente, empezando desde 0
+transitions = []   #es una lista que guardara las transiciones del autómata como tuplas (origen,destino,simbolo)
+
+
+
+
+#funcion para generar nuevos estados, cada vez que se llama, devuelve un nuevo estado y aumenta el contador de estados
+def new_state():
+    global state_counter
+    state = state_counter
+    state_counter += 1
+    return state
+
+
+
+
+
+#funcion para insertar concatenaciones explicitas (.) en la expresion regular
+def add_concatenation_symbols(expr):
+    result = ""
+    for i in range(len(expr)):
+        result += expr[i]
+        if i + 1 < len(expr):
+            if (expr[i].isalnum() or expr[i] == ')' or expr[i] == '*') and \
+               (expr[i+1].isalnum() or expr[i+1] == '('):
+                result += '.'
+    return result
+
+
+
+#funcion para encerrar la expresion entre parentesis si hace falta, simplifica la recursividad para parsear 
+def hash(expr):
+    if len(expr) > 1 and not expr.startswith('('):
+        expr = '(' + expr + ')'
+    return expr
+
+
+
+#algoritmo de kleene recursivo que construye el autómata finito no determinista (AFN) a partir de la expresión regular
+def kleene_recursive(expr):
+    global transitions
+
+    # Caso base:si la expresion es vacia crea una transicion vacia (λ) de un estado inicial a uno final
+    if len(expr) == 0:
+        start = new_state()
+        end = new_state()
+        transitions.append((start, end, 'λ'))
+        return start, end
+
+    # Caso base: Si la expresión es un solo símbolo, crea un automata de dos estados con una transicion que lo consume 
+    if len(expr) == 1:
+        start = new_state()
+        end = new_state()
+        transitions.append((start, end, expr))
+        return start, end
+
+    # Si la expresión está entre paréntesis, quitar los paréntesis externos para analizar el contenido 
+    if expr.startswith('(') and expr.endswith(')'):
+        expr = expr[1:-1]
+
+
+    # Procesar unión
+
+     #busca un + de nivel superior (no dentro de paréntesis). construye dos sub AFN y los une con transiciones λ
+    depth = 0
+    for i in range(len(expr)):
+        if expr[i] == '(':
+            depth += 1
+        elif expr[i] == ')':
+            depth -= 1
+        elif expr[i] == '+' and depth == 0:  
+
+        # Si encuentra un +, divide la expresión en dos partes y llama recursivamente a kleene_recursive
+        # conecta un nuevo estado inicial a ambos automatas con transiciones λ y los une a un nuevo estado final. esto  implementa la union
+            left = expr[:i]
+            right = expr[i+1:]
+            left_start, left_end = kleene_recursive(left)
+            right_start, right_end = kleene_recursive(right)
+
+            start = new_state()
+            end = new_state()
+
+            transitions.append((start, left_start, 'λ'))
+            transitions.append((start, right_start, 'λ'))
+            transitions.append((left_end, end, 'λ'))
+            transitions.append((right_end, end, 'λ'))
+
+            return start, end
+
+
+
+
+    # Procesar concatenación
+
+    # Busca un punto (.) de nivel superior (no dentro de paréntesis). construye dos sub AFN y los une con transiciones λ
+    depth = 0
+    for i in range(len(expr)):
+        if expr[i] == '(':
+            depth += 1
+        elif expr[i] == ')':
+            depth -= 1
+        elif expr[i] == '.' and depth == 0:
+
+            # Si encuentra un punto, divide la expresión en dos partes y llama recursivamente a kleene_recursive
+            # conecta el final del primer automata al inicio del segundo con una transicion λ. esto implementa la concatenacion
+            left = expr[:i]
+            right = expr[i+1:]
+            left_start, left_end = kleene_recursive(left)
+            right_start, right_end = kleene_recursive(right)
+
+            transitions.append((left_end, right_start, 'λ'))
+
+            return left_start, right_end
+
+
+
+
+
+    # Procesar estrella
+
+    # Busca un asterisco (*) al final de la expresión. crea un nuevo estado inicial y final, conecta el inicio al sub AFN y permite transiciones λ
+    # conecta el final del sub AFN de vuelta al inicio y al nuevo estado final. esto implementa la estrella de Kleene
+    if expr[-1] == '*':
+        subexpr = expr[:-1]
+        sub_start, sub_end = kleene_recursive(subexpr)
+
+        start = new_state()
+        end = new_state()
+
+        transitions.append((start, sub_start, 'λ'))
+        transitions.append((sub_end, sub_start, 'λ'))
+        transitions.append((start, end, 'λ'))
+        transitions.append((sub_end, end, 'λ'))
+
+        return start, end
+
+
+
+    # por si no se pudo parsear correctamente la expresión regular
+    raise ValueError(f"Expresión no válida o no reconocida: {expr}")
+
+
+
+# Función principal para dibujar el NFA a partir de una expresión regular
+def draw_nfa(expr):
+    global transitions, state_counter   #reinicia las transiciones y el contador de estados 
+    transitions = []
+    state_counter = 0
+
+    expr = hash(expr)    #prepara la expresion, la transforma y construye el AFN 
+    expr = add_concatenation_symbols(expr)
+    start, end = kleene_recursive(expr)
+
+    graph = Digraph(format="png")   #crea el grafo dirigido, de izquierda a derecha 
+    graph.attr(rankdir="LR")
+
+    # Crear nodos. El estado inicial se pinta de verde, el final es doble círculo (Aceptación)
+    for state in range(state_counter):
+        shape = "doublecircle" if state == end else "circle"
+        color = "green" if state == start else "black"
+        graph.node(str(state), shape=shape, color=color)
+
+    # Crear transiciones con sus etiquetas (simbolos o λ)
+    for from_state, to_state, symbol in transitions:
+        symbol = "λ" if symbol == "ε" else symbol  # Reemplaza "ε" por "λ"
+        graph.edge(str(from_state), str(to_state), label=symbol)
+
+    graph.render("AFN_Kleene", view=True) #guarda el archivo como PNG y lo abre automaticamente 
+
+
+
+#codigo principal: pide al usuario una expresion regular y genera el AFN visual
+if __name__ == "__main__":
+    expr_input = input("Ingrese una expresión regular (usa +, *, y concatenación implícita como ab o a(b+c)*): ")
+    draw_nfa(expr_input)

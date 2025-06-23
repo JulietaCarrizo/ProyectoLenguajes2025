@@ -1,0 +1,129 @@
+🔸 ¿Qué hace su programa?
+Toma una expresión regular como input (por ejemplo, (ab + ba)) y construye automáticamente su autómata finito no determinista con transiciones λ, utilizando el algoritmo de Kleene (solo la ida, no vuelta).
+
+🔸 ¿Cómo manejan la concatenación implícita?
+Antes de construir el autómata, transformamos las expresiones como ab en a.b, agregando puntos explícitos. Esto facilita separar las subexpresiones.
+
+🔸 ¿Cómo identifican qué parte de la expresión aplicar: unión, concatenación o estrella?
+Recorremos la expresión con cuidado, controlando los niveles de paréntesis. Detectamos:
+
++ a nivel superficial → unión
+
+. → concatenación
+
+* al final → estrella de Kleene
+
+🔸 ¿Qué representa cada estado en su código?
+Cada estado es un número único generado con new_state(). Hay uno inicial y uno final por cada sub-AFN. Luego, según el operador (+, *, etc.), se conectan entre sí con transiciones λ.
+
+🔸 ¿Qué muestra el gráfico generado?
+El gráfico muestra los estados (círculos) y transiciones (flechas etiquetadas).
+
+El estado inicial está en verde.
+
+El final es doble círculo.
+
+Las transiciones vacías se marcan como λ.
+
+🔸 ¿Qué librerías usan?
+Solo usamos graphviz, que permite dibujar el grafo en formato PNG y visualizarlo automáticamente. También usamos solo funciones estándar de Python.
+
+🔸 ¿Cómo funciona la estrella de Kleene en su implementación?
+Cuando una subexpresión tiene *, el autómata que la representa se adapta para poder repetirla cero o más veces.
+Creamos un nuevo estado inicial y final. Desde el inicial:
+
+Puede ir al autómata de la subexpresión.
+
+O directamente al final (caso "cero repeticiones").
+
+Y desde el final de la subexpresión:
+
+Puede volver a empezar.
+
+O ir al estado final.
+
+Todo eso se hace con transiciones λ (vacías).
+
+🔸 ¿Qué hace si se ingresa una expresión inválida?
+Si la expresión no se puede descomponer correctamente según el algoritmo (por ejemplo, si faltan paréntesis), el programa lanza una excepción con un mensaje de error:
+"Expresión no válida o no reconocida: ..."
+
+🔸 ¿Qué es una transición λ y por qué se usa?
+Es una transición que no consume símbolos. Se usa para unir sub-autómatas sin necesidad de consumir un carácter.
+Por ejemplo, para hacer uniones (+), o repetir algo (*), necesitamos conectar estados sin consumir nada del input. Para eso usamos λ.
+
+
+🔸 ¿Cómo diferencia el programa entre una concatenación y una unión?
+Al principio del código usamos una función que inserta concatenaciones explícitas (.).
+Por ejemplo, la ER ab+c se convierte en a.b+c.
+Esto permite al parser saber cuándo dos símbolos están "pegados" (concatenación) y cuándo hay una unión (+).
+
+🔸 ¿Qué significa cada uno de los símbolos que usa el programa?
+Símbolo	Significado
+a, b, ...	símbolos del alfabeto
++	unión (or)
+.	concatenación explícita
+*	estrella de Kleene (repetición cero o más veces)
+λ	transición vacía (no consume símbolo)
+()	agrupación de subexpresiones
+
+🔸 ¿Por qué se usa una pila para construir el autómata?
+Porque estamos evaluando una expresión posfija (también conocida como notación polaca inversa).
+En esa notación, al encontrar un operador (*, ., +), simplemente tomamos uno o dos operandos (autómatas) de la pila y construimos el nuevo autómata.
+Esto facilita la evaluación sin ambigüedad ni necesidad de priorizar operadores.
+🧩 ¿Dónde está la “pila oculta”?
+La "pila" en tu código está implícita en las llamadas recursivas a la función kleene_recursive. En Python (como en muchos lenguajes), cada llamada a una función se guarda en la pila de llamadas (call stack) del sistema.
+
+📌 ¿Cómo simula una pila la función kleene_recursive?
+Cada vez que la función encuentra algo como un ( o un operador +, * o .:
+
+Llama a sí misma con una subexpresión.
+
+Espera que esa llamada le devuelva el NFA de esa subexpresión.
+
+Usa ese resultado para construir algo más complejo.
+
+Todo eso se hace por medio de la pila de llamadas de Python.
+
+✨ Ejemplo:
+Supongamos que ingresás:
+
+plaintext
+Copiar
+Editar
+(a+b)*.a
+hash(expr) transforma la expresión (si hay #).
+
+draw_nfa llama a kleene_recursive("((a+b)*.a)")
+
+kleene_recursive:
+
+Encuentra los paréntesis → llama a sí misma con "a+b" → espera el resultado.
+
+Luego encuentra * → llama a kleene_star(...) con el resultado anterior.
+
+Luego encuentra . → llama a concatenate(...) con el resultado anterior y con a (otro llamado a kleene_recursive('a')).
+
+Cada uno de estos pasos usa la pila del sistema para ir resolviendo desde lo más interno a lo externo.
+
+
+🔸 ¿Qué hace el programa si hay más de un + o * seguidos?
+Como usamos la notación posfija, se respeta la precedencia y agrupación correcta.
+Por ejemplo, (a+b)*c se convierte en a b + * c ., y el orden correcto se mantiene al construir autómatas.
+
+
+🔸 ¿Cómo está estructurado el código?
+Está dividido en partes:
+
+Preprocesamiento: agrega puntos . entre símbolos que deben ser concatenados.
+
+Conversión a posfija: transforma la expresión infija a posfija con el algoritmo de Shunting Yard.
+
+Construcción del autómata: usa una pila y operadores para construir el autómata paso a paso.
+
+Graficación: usa graphviz para mostrar el diagrama del autómata.
+
+🔸 ¿Qué complejidad tiene el algoritmo?
+Depende de la longitud de la expresión regular.
+La conversión a posfija es O(n), y la construcción del autómata también es O(n), donde n es la cantidad de símbolos y operadores.
+En general es eficiente para expresiones regulares normales (no muy grandes).
